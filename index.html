@@ -13,6 +13,10 @@
     <link id="dynamic-manifest" rel="manifest" href="">
 
     <title>Plan de Alimentación</title>
+    
+    <link rel="icon" type="image/png" href="dieta.png">
+    <link rel="apple-touch-icon" href="dieta.png">
+
     <!-- Script para habilitar el Modo Oscuro en Tailwind -->
     <script>
         tailwind = { config: { darkMode: 'class' } };
@@ -24,78 +28,13 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // 1. Crear un lienzo (canvas) invisible
-            var canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
-            var ctx = canvas.getContext('2d');
-            
-            // 2. Dibujar fondo cuadrado con bordes redondeados (Teal oscuro)
-            ctx.fillStyle = '#0f766e'; 
-            ctx.beginPath();
-            var radius = 115;
-            ctx.moveTo(radius, 0);
-            ctx.lineTo(512 - radius, 0);
-            ctx.quadraticCurveTo(512, 0, 512, radius);
-            ctx.lineTo(512, 512 - radius);
-            ctx.quadraticCurveTo(512, 512, 512 - radius, 512);
-            ctx.lineTo(radius, 512);
-            ctx.quadraticCurveTo(0, 512, 0, 512 - radius);
-            ctx.lineTo(0, radius);
-            ctx.quadraticCurveTo(0, 0, radius, 0);
-            ctx.fill();
-            
-            // 3. Dibujar icono (Una manzana)
-            // Cuerpo de la manzana
-            ctx.fillStyle = '#10B981'; 
-            ctx.beginPath();
-            ctx.moveTo(256, 170);
-            ctx.bezierCurveTo(360, 170, 410, 270, 360, 370);
-            ctx.bezierCurveTo(310, 440, 270, 420, 256, 420);
-            ctx.bezierCurveTo(242, 420, 202, 440, 152, 370);
-            ctx.bezierCurveTo(102, 270, 152, 170, 256, 170);
-            ctx.fill();
-            // Hoja
-            ctx.fillStyle = '#34D399'; 
-            ctx.beginPath();
-            ctx.moveTo(256, 160);
-            ctx.quadraticCurveTo(280, 100, 340, 100);
-            ctx.quadraticCurveTo(340, 150, 256, 160);
-            ctx.fill();
-            // Tallo
-            ctx.strokeStyle = '#064E3B'; 
-            ctx.lineWidth = 14;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(256, 160);
-            ctx.quadraticCurveTo(260, 130, 270, 110);
-            ctx.stroke();
-
-            // 4. Extraer el dibujo como imagen invisible
-            var iconUrl = canvas.toDataURL('image/png');
-            
-            // 5. Entregárselo a Safari (iOS) para la pantalla de inicio
-            var linkApple = document.createElement('link');
-            linkApple.rel = 'apple-touch-icon';
-            linkApple.sizes = '512x512';
-            linkApple.href = iconUrl;
-            document.head.appendChild(linkApple);
-            
-            // Favicon clásico
-            var linkFavicon = document.createElement('link');
-            linkFavicon.rel = 'icon';
-            linkFavicon.type = 'image/png';
-            linkFavicon.href = iconUrl;
-            document.head.appendChild(linkFavicon);
-
-            // 6. Entregárselo a Android (PWA Manifest)
             var manifest = {
                 name: "NutriApp",
                 short_name: "Mi Dieta",
                 display: "standalone",
                 background_color: "#111827",
                 theme_color: "#0f766e",
-                icons: [{ src: iconUrl, sizes: "512x512", type: "image/png", purpose: "any maskable" }]
+                icons: [{ src: "dieta.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }]
             };
             var manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
             document.getElementById('dynamic-manifest').href = URL.createObjectURL(manifestBlob);
@@ -562,6 +501,12 @@
                     const savedSettings = localStorage.getItem('nutriApp_settings');
                     if (savedSettings) settings.value = { ...defaultSettings, ...JSON.parse(savedSettings) };
 
+                    const savedExpandedMeals = localStorage.getItem('nutriApp_expandedMeals');
+                    if (savedExpandedMeals) expandedMeals.value = JSON.parse(savedExpandedMeals);
+
+                    const savedTab = localStorage.getItem('nutriApp_currentTab');
+                    if (savedTab) currentTab.value = savedTab;
+
                     // Auto-scroll centrado al día de hoy al cargar la app
                     setTimeout(() => {
                         const scrollContainer = document.getElementById('days-scroll-container');
@@ -591,6 +536,14 @@
                         document.documentElement.classList.remove('dark');
                     }
                 }, { deep: true, immediate: true });
+
+                watch(expandedMeals, (newVal) => {
+                    localStorage.setItem('nutriApp_expandedMeals', JSON.stringify(newVal));
+                }, { deep: true });
+
+                watch(currentTab, (newVal) => {
+                    localStorage.setItem('nutriApp_currentTab', newVal);
+                });
 
                 // Computed Properties y Helpers
                 const toggleMeal = (mealName) => {

@@ -1,1 +1,645 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plan de Alimentación</title>
+    <!-- Script para habilitar el Modo Oscuro en Tailwind -->
+    <script>
+        tailwind = { config: { darkMode: 'class' } };
+    </script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overscroll-behavior-y: none;
+            background-color: #111827; /* Fallback oscuro */
+        }
+        
+        /* Ocultar barra de scroll pero permitir scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
 
+        /* Transiciones suaves */
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.3s ease;
+        }
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+        }
+
+        /* Checkbox personalizado */
+        .checkbox-custom:checked + div {
+            background-color: #10b981;
+            border-color: #10b981;
+        }
+        .checkbox-custom:checked + div svg {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="relative min-h-screen max-w-md mx-auto bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-2xl overflow-hidden flex flex-col transition-colors duration-300">
+        
+        <!-- Fondo Dinámico configurado desde ajustes -->
+        <div class="absolute inset-0 z-0 bg-cover bg-center transition-all duration-500"
+             :style="{ backgroundImage: settings.bgImage ? `url(${settings.bgImage})` : 'none', 
+                       backgroundColor: settings.bgImage ? 'transparent' : (settings.darkMode ? '#111827' : '#f8fafc') }">
+        </div>
+        <!-- Capa de opacidad sobre el fondo -->
+        <div class="absolute inset-0 z-0 transition-all duration-300"
+             :style="{ backgroundColor: settings.overlayColor, opacity: settings.overlayOpacity / 100 }">
+        </div>
+
+        <!-- Contenido Principal (Z-10 para estar sobre el fondo) -->
+        <div class="relative z-10 flex flex-col h-screen">
+            
+            <!-- Header Fijo -->
+            <header class="bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm pt-8 pb-4 px-6 sticky top-0 z-20 transition-colors duration-300"
+                    :style="{ backgroundColor: getHeaderColor() }">
+                <h1 class="text-sm font-bold text-teal-700 dark:text-teal-400 text-center tracking-tight">PLAN DE ALIMENTACIÓN SEMANAL</h1>
+            </header>
+
+            <!-- Área de Contenido con Scroll -->
+            <main class="flex-1 overflow-y-auto no-scrollbar pb-24 relative">
+                <transition name="fade" mode="out-in">
+                    
+                    <!-- VISTA: DIETA -->
+                    <div v-if="currentTab === 'dieta'" key="dieta" class="p-4 space-y-6">
+                        
+                        <!-- Selector de Días (Horizontal Scroll) -->
+                        <div id="days-scroll-container" class="flex overflow-x-auto no-scrollbar -mx-4 px-4 space-x-3 snap-x pb-2 pt-2">
+                            <button v-for="day in days" :key="day" 
+                                    :id="'day-btn-' + day"
+                                    @click="activeDay = day"
+                                    class="snap-start shrink-0 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-300 shadow-sm relative flex flex-col items-center justify-center min-w-[90px]"
+                                    :class="[
+                                        activeDay === day 
+                                            ? 'bg-teal-600 text-white shadow-teal-200 dark:shadow-teal-900/50 scale-105' 
+                                            : 'bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700',
+                                        todayDay === day && activeDay !== day ? 'ring-2 ring-teal-400/50' : ''
+                                    ]">
+                                <span v-if="todayDay === day" class="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-teal-300"></span>
+                                </span>
+                                {{ day }}
+                                <span v-if="todayDay === day" class="text-[9px] font-normal opacity-80 mt-0.5">Hoy</span>
+                            </button>
+                        </div>
+
+                        <!-- Tarjetas de Comidas del Día Seleccionado (Acordeón) -->
+                        <div class="space-y-3">
+                            <div v-for="(meal, mealName) in dietPlan[activeDay]" :key="mealName" 
+                                 class="rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-300 overflow-hidden"
+                                 :style="{ backgroundColor: getCardColor(1) }">
+                                <!-- Cabecera Clickable -->
+                                <button @click="toggleMeal(mealName)" class="w-full flex items-center justify-between p-4 text-left outline-none">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center text-teal-500">
+                                            <i :class="getMealIcon(mealName)"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-gray-800 dark:text-gray-100 capitalize text-sm">
+                                                {{ formatMealName(mealName) }}
+                                            </h3>
+                                            <span class="text-[10px] font-medium text-teal-600 dark:text-teal-400">
+                                                {{ getMealKcal(mealName) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="w-6 h-6 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center transition-transform duration-300"
+                                         :class="{ 'rotate-180': expandedMeals[mealName] }">
+                                        <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+                                    </div>
+                                </button>
+                                
+                                <!-- Contenido Desplegable -->
+                                <div v-show="expandedMeals[mealName]" class="px-4 pb-4 pt-2 border-t border-gray-50 dark:border-gray-700/50">
+                                    <ul class="space-y-2 pl-1 mt-1">
+                                        <li v-for="(item, index) in meal" :key="index" 
+                                            class="text-gray-700 dark:text-gray-300 text-sm flex items-start">
+                                            <i class="fas fa-check text-teal-400 text-[10px] mt-1 mr-2 opacity-70"></i>
+                                            <span v-html="item" class="leading-snug"></span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VISTA: LISTA DE LA COMPRA -->
+                    <div v-else-if="currentTab === 'compra'" key="compra" class="p-4">
+                        <div class="mb-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Marca los productos que ya tienes.</p>
+                                <button @click="resetShoppingList" class="text-xs text-red-500 font-medium bg-red-50 dark:bg-red-900/30 px-3 py-1.5 rounded-full">
+                                    Limpiar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-for="(items, category) in groupedShoppingList" :key="category" class="mb-6">
+                            <h3 class="font-bold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2 sticky top-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur py-2 z-10 transition-colors duration-300" :style="{ backgroundColor: getHeaderColor() }">
+                                <i :class="getCategoryIcon(category)" class="text-teal-500"></i>
+                                {{ category }}
+                            </h3>
+                            <div class="space-y-2">
+                                <label v-for="item in items" :key="item.name" 
+                                       class="flex items-center p-3 rounded-xl shadow-sm cursor-pointer transition-colors border"
+                                       :style="{ backgroundColor: getCardColor(1), borderColor: item.checked ? '#10b981' : (settings.darkMode ? '#374151' : 'rgba(0,0,0,0.05)') }"
+                                       :class="{ 'opacity-60': item.checked }">
+                                    <div class="relative flex items-center justify-center">
+                                        <input type="checkbox" v-model="item.checked" class="sr-only checkbox-custom">
+                                        <div class="w-6 h-6 border-2 rounded-md border-gray-300 dark:border-gray-600 flex items-center justify-center transition-colors bg-white dark:bg-gray-800">
+                                            <svg class="w-4 h-4 text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                        </div>
+                                    </div>
+                                    <span class="ml-3 text-sm font-medium transition-all" :class="item.checked ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-700 dark:text-gray-300'">
+                                        {{ item.name }}
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VISTA: NOTAS IMPORTANTES -->
+                    <div v-else-if="currentTab === 'notas'" key="notas" class="p-4 space-y-4">
+                        
+                        <!-- Información del plan -->
+                        <div class="rounded-2xl shadow-sm p-5 border border-gray-100 dark:border-gray-700 transition-colors duration-300" :style="{ backgroundColor: getCardColor(1) }">
+                            <h3 class="font-bold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2 text-sm border-b border-gray-100 dark:border-gray-700 pb-2">
+                                <i class="fas fa-bullseye text-teal-500"></i> Objetivo y Perfil
+                            </h3>
+                            <div class="space-y-2">
+                                <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                    <strong class="text-gray-900 dark:text-gray-100">Objetivo:</strong> bajar % de grasa corporal y edad metabólica · ~1.850-1.950 kcal/día · Proteína 140-160 g
+                                </p>
+                                <p class="text-[13px] text-gray-600 dark:text-gray-400 leading-relaxed">
+                                    Mujer 33 años · 173 cm · 85,7 kg · % grasa 35,1 · Edad metabólica 48 · CrossFit 3x/semana · Postparto 3 meses (no lactante)
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="rounded-2xl shadow-sm p-6 space-y-5 border border-gray-100 dark:border-gray-700 transition-colors duration-300" :style="{ backgroundColor: getCardColor(1) }">
+                            <h2 class="text-teal-700 dark:text-teal-400 font-bold text-xl border-b border-gray-200 dark:border-gray-700 pb-3">NOTAS IMPORTANTES</h2>
+                            
+                            <div class="space-y-4">
+                                <div v-for="(nota, index) in notes" :key="index" class="flex items-start gap-3">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-teal-500 mt-2 shrink-0"></div>
+                                    <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                        <strong v-if="nota.title" class="text-gray-900 dark:text-gray-100">{{ nota.title }}:</strong> {{ nota.text }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 italic text-center leading-relaxed">
+                                    Este plan es orientativo y personalizado según los datos de la báscula. Ajusta porciones si sientes demasiada hambre o demasiada saciedad. Prioriza consistencia sobre perfección.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VISTA: AJUSTES -->
+                    <div v-else-if="currentTab === 'ajustes'" key="ajustes" class="p-4">
+                        <div class="rounded-2xl shadow-sm p-6 space-y-6 border border-gray-100 dark:border-gray-700 transition-colors duration-300" :style="{ backgroundColor: getCardColor(1) }">
+                            <h2 class="text-gray-800 dark:text-gray-100 font-bold text-xl mb-4"><i class="fas fa-paint-roller mr-2 text-teal-500"></i> Personalización</h2>
+                            
+                            <!-- Modo Oscuro -->
+                            <div class="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-700">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Modo Oscuro</p>
+                                    <p class="text-[10px] text-gray-500 dark:text-gray-400">Cambia entre tema claro y oscuro</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                  <input type="checkbox" v-model="settings.darkMode" class="sr-only peer">
+                                  <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-teal-500"></div>
+                                </label>
+                            </div>
+
+                            <!-- Color de Tarjetas -->
+                            <div class="space-y-2">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Color base de las tarjetas</label>
+                                <div class="flex gap-3">
+                                    <input type="color" v-model="settings.cardColor" class="h-10 w-20 rounded cursor-pointer border-0 p-0">
+                                    <button @click="settings.cardColor = '#ffffff'" class="text-xs border border-gray-200 dark:border-gray-600 px-3 py-1 rounded bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">Restablecer a Blanco</button>
+                                </div>
+                            </div>
+
+                            <!-- Fondo de pantalla (Galería) -->
+                            <div class="space-y-2 pt-4 border-t border-gray-100 dark:border-gray-700">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Fondo de pantalla (Galería de imágenes)</label>
+                                <input type="file" accept="image/*" @change="onFileChange" 
+                                       class="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 dark:file:bg-teal-900/30 dark:file:text-teal-400 transition-colors cursor-pointer outline-none">
+                                <button v-if="settings.bgImage" @click="settings.bgImage = ''" class="mt-3 text-xs text-red-500 bg-red-50 dark:bg-red-900/30 px-4 py-2 rounded-full font-medium shadow-sm transition-colors">
+                                    <i class="fas fa-trash-alt mr-1"></i> Quitar foto actual
+                                </button>
+                            </div>
+
+                            <!-- Opacidad del Fondo / Capa oscurecedora -->
+                            <div class="space-y-2 pt-4 border-t border-gray-100 dark:border-gray-700">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Oscurecer/Aclarar fondo</label>
+                                <div class="flex items-center gap-4">
+                                    <input type="range" min="0" max="100" v-model="settings.overlayOpacity" 
+                                           class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                                    <span class="text-sm text-gray-600 dark:text-gray-400 w-8 text-right">{{ settings.overlayOpacity }}%</span>
+                                </div>
+                                
+                                <div class="flex gap-4 mt-2">
+                                     <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                                        <input type="radio" v-model="settings.overlayColor" value="#000000" class="accent-teal-500"> Oscuro
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                                        <input type="radio" v-model="settings.overlayColor" value="#ffffff" class="accent-teal-500"> Claro
+                                    </label>
+                                </div>
+                            </div>
+                            
+                             <div class="pt-6 border-t border-gray-100 dark:border-gray-700">
+                                <button @click="resetAllSettings" class="w-full py-3 bg-gray-800 dark:bg-gray-700 text-white rounded-xl font-medium shadow-md hover:bg-gray-700 dark:hover:bg-gray-600 transition">
+                                    Restablecer todo por defecto
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </transition>
+
+                <!-- Modal de Confirmación Limpiar Compra -->
+                <transition name="fade">
+                    <div v-if="showConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <div class="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-xs shadow-2xl transform transition-all border border-gray-100 dark:border-gray-700">
+                            <div class="w-12 h-12 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center mb-4 mx-auto text-red-500 shadow-inner">
+                                <i class="fas fa-trash-alt text-xl"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white text-center mb-2">¿Vaciar carrito?</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 text-center mb-6 leading-relaxed">Se desmarcarán todos los productos que ya has tachado de tu lista.</p>
+                            <div class="flex gap-3 justify-center">
+                                <button @click="showConfirm = false" class="px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors w-full">Cancelar</button>
+                                <button @click="executeResetShoppingList" class="px-4 py-2.5 text-sm font-semibold text-white bg-red-500 rounded-xl hover:bg-red-600 shadow-md shadow-red-500/20 transition-colors w-full">Sí, vaciar</button>
+                            </div>
+                        </div>
+                    </div>
+                </transition>
+
+            </main>
+
+            <!-- Bottom Navigation -->
+            <nav class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 flex justify-around items-center pb-safe pt-2 absolute bottom-0 w-full z-20 pb-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] transition-colors duration-300"
+                 :style="{ backgroundColor: getHeaderColor() }">
+                <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+                        class="flex flex-col items-center p-2 w-16 transition-colors"
+                        :class="currentTab === tab.id ? 'text-teal-600 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'">
+                    <i :class="tab.icon" class="text-xl mb-1 transition-transform" :class="{'scale-110': currentTab === tab.id}"></i>
+                    <span class="text-[10px] font-medium">{{ tab.label }}</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, watch, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // Estado Principal
+                const currentTab = ref('dieta');
+                const activeDay = ref('Lunes');
+                const todayDay = ref('');
+                const expandedMeals = ref({});
+                const isInfoExpanded = ref(false);
+                const showConfirm = ref(false);
+                
+                const tabs = [
+                    { id: 'dieta', label: 'Dieta', icon: 'fas fa-utensils' },
+                    { id: 'compra', label: 'Compra', icon: 'fas fa-shopping-cart' },
+                    { id: 'notas', label: 'Notas', icon: 'fas fa-book-open' },
+                    { id: 'ajustes', label: 'Ajustes', icon: 'fas fa-cog' }
+                ];
+
+                const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+                // Datos de la Dieta (Transición EXACTA del documento)
+                const dietPlan = {
+                    'Lunes': {
+                        'desayuno': ['3 claras + 1 huevo', '40g avena + frutos rojos', 'Canela'],
+                        'media_manana': ['1 manzana', '20g almendras'],
+                        'comida': ['160g pechuga pollo', '150g arroz integral', 'Ensalada grande', '½ aguacate'],
+                        'merienda': ['Batido: 30g proteína', '½ plátano', '(agua o leche)'],
+                        'cena': ['160g merluza', 'Verduras al vapor', '(brócoli + calabacín)', '100g patata']
+                    },
+                    'Martes': {
+                        'desayuno': ['Yogur griego 0%', '200g + 25g proteína', '20g nueces', '½ plátano'],
+                        'media_manana': ['1 pera', '25g queso fresco'],
+                        'comida': ['150g salmón', '200g patata horno', 'Espárragos + AOVE'],
+                        'merienda': ['150g queso fresco', 'batido 0%', '100g fresas'],
+                        'cena': ['180g pavo', 'Ensalada de hojas', '+ tomate + pepino', '½ aguacate']
+                    },
+                    'Miércoles': {
+                        'desayuno': ['3 claras + 1 huevo', '40g avena + arándanos', 'Canela'],
+                        'media_manana': ['1 naranja', '20g almendras'],
+                        'comida': ['160g pechuga pavo', '80g lentejas', 'Verduras salteadas'],
+                        'merienda': ['Batido: 30g proteína', '½ plátano', '(agua o leche)'],
+                        'cena': ['Tortilla 2 huevos', '+ 3 claras', 'Verduras + 40g', 'pan integral']
+                    },
+                    'Jueves': {
+                        'desayuno': ['Yogur griego 0%', '200g + 25g proteína', '15g cacao + fresas'],
+                        'media_manana': ['1 plátano', '15g nueces'],
+                        'comida': ['180g pechuga pollo', '150g quinoa', 'Ensalada mixta', 'AOVE'],
+                        'merienda': ['150g queso fresco', 'batido 0%', 'Canela'],
+                        'cena': ['160g bacalao', 'o merluza', 'Judías verdes', '100g boniato']
+                    },
+                    'Viernes': {
+                        'desayuno': ['3 claras + 1 huevo', '40g avena + frutos', 'rojos + canela'],
+                        'media_manana': ['1 manzana', '20g almendras'],
+                        'comida': ['150g atún natural', 'o salmón', '200g patata', 'Ensalada grande'],
+                        'merienda': ['Batido: 30g proteína', '½ plátano', '(agua o leche)'],
+                        'cena': ['160g pechuga pavo', 'Brócoli + coliflor', '½ aguacate']
+                    },
+                    'Sábado': {
+                        'desayuno': ['Tortilla 2 huevos', '+ 2 claras', 'Espárragos', '40g pan integral'],
+                        'media_manana': ['1 pera', '25g queso fresco'],
+                        'comida': ['180g carne magra', '(ternera/pavo)', '150g arroz', 'Verduras al vapor'],
+                        'merienda': ['Yogur griego 0%', '150g + frutos rojos'],
+                        'cena': ['160g pescado', 'blanco', 'Ensalada completa', 'AOVE']
+                    },
+                    'Domingo': {
+                        'desayuno': ['Yogur griego 0%', '200g + 25g proteína', '20g nueces', '½ plátano'],
+                        'media_manana': ['1 naranja', '20g almendras'],
+                        'comida': ['160g pollo', '80g garbanzos', 'Ensalada + ½', 'aguacate'],
+                        'merienda': ['150g queso fresco', 'batido 0%', '100g fresas'],
+                        'cena': ['Tortilla de claras', '+ verduras', '100g patata', 'AOVE']
+                    }
+                };
+
+                const kcalInfo = {
+                    'desayuno': '(~450 kcal)',
+                    'media_manana': '(~200 kcal)',
+                    'comida': '(~550-600 kcal)',
+                    'merienda': '(~250-300 kcal)',
+                    'cena': '(~450-500 kcal)'
+                };
+
+                // Notas Exactas
+                const notes = [
+                    { title: 'Proteína alta en cada comida', text: 'preserva músculo y eleva el metabolismo (clave para bajar edad metabólica).' },
+                    { title: 'Días de CrossFit (recomendado L-M-V o similar)', text: 'prioriza el batido de proteína post-entreno. Si entrenas otro día, mueve el batido.' },
+                    { title: 'Agua', text: 'mínimo 2,5-3 litros al día (tu % de agua está algo bajo).' },
+                    { title: 'Piernas', text: 'combina el plan con fuerza en tren inferior (sentadillas, zancadas, hip thrust) + 8-10.000 pasos diarios.' },
+                    { title: 'Cocción', text: 'plancha, horno, vapor o airfryer. Evita fritos. Usa especias, limón, hierbas y un chorrito de AOVE.' },
+                    { title: 'Sustituciones rápidas', text: 'pollo ↔ pavo ↔ pescado blanco; arroz ↔ quinoa ↔ patata/boniato; almendras ↔ nueces.' },
+                    { title: 'Postparto', text: 'déficit moderado y seguro. Consulta con tu médico si tienes cualquier duda o revisión pendiente.' },
+                    { title: 'Seguimiento', text: 'pésate en las mismas condiciones. Revisa evolución de % grasa y edad metabólica cada 2-3 semanas.' }
+                ];
+
+                // Base de datos de la lista de la compra (categorizada)
+                const initialShoppingList = [
+                    // Proteínas
+                    { name: 'Huevos y Claras', category: 'Proteínas', checked: false },
+                    { name: 'Pechuga de pollo', category: 'Proteínas', checked: false },
+                    { name: 'Pechuga de pavo', category: 'Proteínas', checked: false },
+                    { name: 'Carne magra (ternera/pavo)', category: 'Proteínas', checked: false },
+                    { name: 'Salmón', category: 'Proteínas', checked: false },
+                    { name: 'Merluza / Bacalao / Pescado blanco', category: 'Proteínas', checked: false },
+                    { name: 'Atún natural', category: 'Proteínas', checked: false },
+                    { name: 'Yogur griego 0%', category: 'Proteínas', checked: false },
+                    { name: 'Queso fresco', category: 'Proteínas', checked: false },
+                    { name: 'Proteína en polvo', category: 'Proteínas', checked: false },
+                    
+                    // Carbohidratos
+                    { name: 'Avena', category: 'Carbohidratos', checked: false },
+                    { name: 'Arroz integral', category: 'Carbohidratos', checked: false },
+                    { name: 'Quinoa', category: 'Carbohidratos', checked: false },
+                    { name: 'Patatas y Boniato', category: 'Carbohidratos', checked: false },
+                    { name: 'Lentejas y Garbanzos', category: 'Carbohidratos', checked: false },
+                    { name: 'Pan integral', category: 'Carbohidratos', checked: false },
+
+                    // Frutas y Verduras
+                    { name: 'Plátanos', category: 'Frutas y Verduras', checked: false },
+                    { name: 'Manzanas y Peras', category: 'Frutas y Verduras', checked: false },
+                    { name: 'Naranjas', category: 'Frutas y Verduras', checked: false },
+                    { name: 'Frutos rojos / Fresas / Arándanos', category: 'Frutas y Verduras', checked: false },
+                    { name: 'Ensalada (hojas mixtas)', category: 'Frutas y Verduras', checked: false },
+                    { name: 'Tomate y Pepino', category: 'Frutas y Verduras', checked: false },
+                    { name: 'Brócoli y Coliflor', category: 'Frutas y Verduras', checked: false },
+                    { name: 'Calabacín y Judías verdes', category: 'Frutas y Verduras', checked: false },
+                    { name: 'Espárragos', category: 'Frutas y Verduras', checked: false },
+
+                    // Grasas y Otros
+                    { name: 'Aguacates', category: 'Grasas y Otros', checked: false },
+                    { name: 'Almendras y Nueces', category: 'Grasas y Otros', checked: false },
+                    { name: 'Aceite de Oliva Virgen Extra (AOVE)', category: 'Grasas y Otros', checked: false },
+                    { name: 'Canela y Cacao puro', category: 'Grasas y Otros', checked: false },
+                    { name: 'Leche o bebida vegetal', category: 'Grasas y Otros', checked: false }
+                ];
+
+                    const shoppingList = ref(JSON.parse(JSON.stringify(initialShoppingList)));
+
+                // Ajustes
+                const defaultSettings = {
+                    cardColor: '#ffffff',
+                    bgImage: '',
+                    overlayColor: '#000000',
+                    overlayOpacity: 0,
+                    darkMode: true
+                };
+                const settings = ref({ ...defaultSettings });
+
+                // Cargar datos guardados y auto-seleccionar día
+                onMounted(() => {
+                    // Obtener día actual
+                    const date = new Date();
+                    const dayIndex = date.getDay(); // 0 Dom, 1 Lun, etc.
+                    const dayMap = {1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 0: 'Domingo'};
+                    const today = dayMap[dayIndex] || 'Lunes';
+                    todayDay.value = today;
+                    activeDay.value = today;
+
+                    const savedList = localStorage.getItem('nutriApp_shoppingList');
+                    if (savedList) shoppingList.value = JSON.parse(savedList);
+
+                    const savedSettings = localStorage.getItem('nutriApp_settings');
+                    if (savedSettings) settings.value = { ...defaultSettings, ...JSON.parse(savedSettings) };
+
+                    // Auto-scroll centrado al día de hoy al cargar la app
+                    setTimeout(() => {
+                        const scrollContainer = document.getElementById('days-scroll-container');
+                        const activeBtn = document.getElementById('day-btn-' + today);
+                        if (scrollContainer && activeBtn) {
+                            const scrollPosition = activeBtn.offsetLeft - (scrollContainer.offsetWidth / 2) + (activeBtn.offsetWidth / 2);
+                            scrollContainer.scrollTo({
+                                left: scrollPosition,
+                                behavior: 'smooth'
+                            });
+                        }
+                    }, 150); // Pequeño delay para dar tiempo a renderizar la vista
+                });
+
+                // Guardar cambios automáticamente
+                watch(shoppingList, (newVal) => {
+                    localStorage.setItem('nutriApp_shoppingList', JSON.stringify(newVal));
+                }, { deep: true });
+
+                watch(settings, (newVal) => {
+                    localStorage.setItem('nutriApp_settings', JSON.stringify(newVal));
+                    
+                    // Lógica Modo Oscuro Tailwind
+                    if (newVal.darkMode) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                }, { deep: true, immediate: true });
+
+                // Computed Properties y Helpers
+                const toggleMeal = (mealName) => {
+                    expandedMeals.value[mealName] = !expandedMeals.value[mealName];
+                };
+
+                const groupedShoppingList = computed(() => {
+                    const groups = {};
+                    shoppingList.value.forEach(item => {
+                        if (!groups[item.category]) groups[item.category] = [];
+                        groups[item.category].push(item);
+                    });
+                    return groups;
+                });
+
+                const formatMealName = (name) => {
+                    if (name === 'media_manana') return 'Media Mañana';
+                    if (name === 'merienda') return 'Merienda / Post-Entreno';
+                    return name;
+                };
+
+                const getMealIcon = (name) => {
+                    const icons = {
+                        'desayuno': 'fas fa-mug-hot',
+                        'media_manana': 'fas fa-apple-alt',
+                        'comida': 'fas fa-utensils',
+                        'merienda': 'fas fa-dumbbell',
+                        'cena': 'fas fa-moon'
+                    };
+                    return icons[name] || 'fas fa-utensils';
+                };
+
+                const getMealKcal = (name) => kcalInfo[name] || '';
+
+                const getCategoryIcon = (category) => {
+                    const icons = {
+                        'Proteínas': 'fas fa-drumstick-bite',
+                        'Carbohidratos': 'fas fa-bread-slice',
+                        'Frutas y Verduras': 'fas fa-carrot',
+                        'Grasas y Otros': 'fas fa-seedling'
+                    };
+                    return icons[category] || 'fas fa-shopping-basket';
+                };
+
+                const getTabTitle = () => {
+                    const titles = {
+                        'dieta': 'Mi Plan',
+                        'compra': 'Lista de la Compra',
+                        'notas': 'Notas Importantes',
+                        'ajustes': 'Personalización'
+                    };
+                    return titles[currentTab.value];
+                };
+
+                const resetShoppingList = () => {
+                    showConfirm.value = true;
+                };
+
+                const executeResetShoppingList = () => {
+                    shoppingList.value.forEach(item => item.checked = false);
+                    showConfirm.value = false;
+                };
+
+                const onFileChange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            
+                            // Redimensionar imagen a máximo 1200px para no saturar la memoria local del navegador
+                            let width = img.width;
+                            let height = img.height;
+                            const maxDim = 1200;
+                            
+                            if (width > height && width > maxDim) {
+                                height *= maxDim / width;
+                                width = maxDim;
+                            } else if (height > maxDim) {
+                                width *= maxDim / height;
+                                height = maxDim;
+                            }
+                            
+                            canvas.width = width;
+                            canvas.height = height;
+                            ctx.drawImage(img, 0, 0, width, height);
+                            
+                            // Convertir y guardar en formato WebP o JPEG
+                            settings.value.bgImage = canvas.toDataURL('image/jpeg', 0.7);
+                        };
+                        img.src = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                };
+
+                const resetAllSettings = () => {
+                    settings.value = { ...defaultSettings };
+                };
+
+                // Helper para colores RGB con opacidad basado en el color hex
+                const hexToRgba = (hex, opacity) => {
+                    let c;
+                    if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+                        c= hex.substring(1).split('');
+                        if(c.length== 3){
+                            c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+                        }
+                        c= '0x'+c.join('');
+                        return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+opacity+')';
+                    }
+                    return `rgba(255, 255, 255, ${opacity})`;
+                };
+
+                const getCardColor = (opacity = 1) => {
+                    if (settings.value.darkMode && settings.value.cardColor === '#ffffff') {
+                        return hexToRgba('#1f2937', opacity); // Gris oscuro si hay modo oscuro
+                    }
+                    return hexToRgba(settings.value.cardColor, opacity);
+                };
+
+                const getHeaderColor = () => {
+                    if (settings.value.darkMode && settings.value.cardColor === '#ffffff') {
+                        return hexToRgba('#111827', 0.95);
+                    }
+                    return hexToRgba(settings.value.cardColor, 0.95);
+                };
+
+                return {
+                    currentTab, tabs, days, activeDay, todayDay, dietPlan, notes,
+                    shoppingList, groupedShoppingList, settings, expandedMeals, isInfoExpanded, showConfirm,
+                    formatMealName, getMealIcon, getMealKcal, getCategoryIcon, getTabTitle, toggleMeal,
+                    resetShoppingList, executeResetShoppingList, resetAllSettings, getCardColor, getHeaderColor, onFileChange
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
